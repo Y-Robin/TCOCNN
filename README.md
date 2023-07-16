@@ -7,3 +7,9 @@ This dataset contains a small dataset to test transfer learning.
 
 Create a new folder within the toolbox named Data and store the downloaded fullData there
 
+Execute the PrepareDataset.mlx File. 
+
+Execute the testBuiltModel.
+
+From here on every method can be tested
+

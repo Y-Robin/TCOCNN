@@ -1,4 +1,4 @@
-function ObjFcn = TCOCNN_OptPara_Retrain(XTrain,YTrain,XValidation,YValidation,defaultParameter,dataTransTrain,targetTransTrain,dataTransTest,targetTransTest)
+function ObjFcn = fullyConected_optPara_Retrain(XTrain,YTrain,XValidation,YValidation,defaultParameter,dataTransTrain,targetTransTrain,dataTransTest,targetTransTest)
     ObjFcn = @valErrorFun;
     function [valError,cons,fileName] = valErrorFun(optVars)
         if gpuDeviceCount > 0
@@ -9,9 +9,9 @@ function ObjFcn = TCOCNN_OptPara_Retrain(XTrain,YTrain,XValidation,YValidation,d
 
         if defaultParameter.Regression == false
             for i = 1:3
-                cnn2DNet = TCOCNN(defaultParameter.InputSize,defaultParameter.OutputSize,defaultParameter.Regression,optVars);
-                cnn2DNet.train(XTrain,YTrain);
-                [~,label] = max(cnn2DNet.apply(XValidation),[],2);
+                Net = fullyConected(defaultParameter.InputSize,defaultParameter.OutputSize,defaultParameter.Regression,optVars);
+                Net.train(XTrain,YTrain);
+                [~,label] = max(Net.apply(XValidation),[],2);
                 valError = valError+helpers.ClassificationError.loss(categorical(label),YValidation);
 
             end
@@ -21,10 +21,10 @@ function ObjFcn = TCOCNN_OptPara_Retrain(XTrain,YTrain,XValidation,YValidation,d
         else
             for i = 1:3
 
-                cnn2DNet = TCOCNN(defaultParameter.InputSize,defaultParameter.OutputSize,defaultParameter.Regression,optVars);
-                cnn2DNet.train(XTrain,YTrain);
-                cnn2DNet.retrainFull(dataTransTrain,targetTransTrain,optVars)
-                pred = cnn2DNet.apply(dataTransTest);
+                Net = fullyConected(defaultParameter.InputSize,defaultParameter.OutputSize,defaultParameter.Regression,optVars);
+                Net.train(XTrain,YTrain);
+                Net.retrainFull(dataTransTrain,targetTransTrain,optVars)
+                pred = Net.apply(dataTransTest);
                 valError = valError + sum(helpers.RMSE.loss(pred,targetTransTest));
             end
             valError = valError/3;

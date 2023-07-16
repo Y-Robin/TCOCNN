@@ -122,10 +122,10 @@ classdef TCOCNN<handle & matlab.mixin.Copyable
             decay = 0.1;
             layers = [
                 convolution2dLayer([1,filterSize],numF,'Padding','same','Stride',[1,stride],'Name',[tag,'conv1'])
-                batchNormalizationLayer('Name',[tag,'BN1'],'VarianceDecay',decay,'MeanDecay',decay)
+                batchNormalizationLayer('Name',[tag,'BN1'])
                 reluLayer('Name',[tag,'relu1'])
                 convolution2dLayer([1,filterSize],numF,'Padding','same','Stride',[1,1],'Name',[tag,'conv2'])
-                batchNormalizationLayer('Name',[tag,'BN2'],'VarianceDecay',decay,'MeanDecay',decay)
+                batchNormalizationLayer('Name',[tag,'BN2'])
                 reluLayer('Name',[tag,'relu2'])
             ];
         
@@ -240,11 +240,14 @@ classdef TCOCNN<handle & matlab.mixin.Copyable
                     newLayer = setfield(netOld.Layers(j,1),'ScaleLearnRateFactor',0);
                     netOld = replaceLayer(netOld,netOld.Layers(j,1).Name,newLayer);
                     newLayer = setfield(netOld.Layers(j,1),'OffsetLearnRateFactor',0);
-                    netOld = replaceLayer(netOld,netOld.Layers(j,1).Name,newLayer);
-                    newLayer = setfield(netOld.Layers(j,1),'MeanDecay',0.00001);
-                    netOld = replaceLayer(netOld,netOld.Layers(j,1).Name,newLayer);
-                    newLayer = setfield(netOld.Layers(j,1),'VarianceDecay',0.00001);
-                    netOld = replaceLayer(netOld,netOld.Layers(j,1).Name,newLayer);
+                    versionDate = version('-date');
+                    if str2double(versionDate(end-4:end))>=2022
+                        netOld = replaceLayer(netOld,netOld.Layers(j,1).Name,newLayer);
+                        newLayer = setfield(netOld.Layers(j,1),'MeanDecay',0.00001);
+                        netOld = replaceLayer(netOld,netOld.Layers(j,1).Name,newLayer);
+                        newLayer = setfield(netOld.Layers(j,1),'VarianceDecay',0.00001);
+                        netOld = replaceLayer(netOld,netOld.Layers(j,1).Name,newLayer);
+                    end
 
                 end
             end
@@ -258,9 +261,11 @@ classdef TCOCNN<handle & matlab.mixin.Copyable
         end
         
 
-
+        %%%% XIA Section 3 Different Methods Available
         function activationMap = customOcclusion(this,dataTrain,dataTest,method)
-            
+            %Method for explainable AI
+            %Input of training data is done to get a reverance sample
+            %Testdata is the data that is analyised
             activationMap = zeros(size(dataTest));
             meanTrainSample = mean(dataTrain,4);
             meanConz = mean(activations(this.net,dataTrain,"Finalrelu fc"));
@@ -310,49 +315,9 @@ classdef TCOCNN<handle & matlab.mixin.Copyable
             end
         end
 
-        function test = shapVal(this,trainSamples,testSamples)
-            
-            dataTrain = zeros(size(trainSamples,4),size(trainSamples,2)*size(trainSamples,1));
-            for i = 1:size(trainSamples,4)
-                dataTemp=[trainSamples(1,:,1,i),trainSamples(2,:,1,i),trainSamples(3,:,1,i),trainSamples(4,:,1,i)];
-                dataTrain(i,:) = dataTemp;
-            end
-            dataTest = zeros(size(testSamples,4),size(trainSamples,2)*size(trainSamples,1));
-            for i = 1:size(testSamples,4)
-                dataTemp=[testSamples(1,:,1,i),testSamples(2,:,1,i),testSamples(3,:,1,i),testSamples(4,:,1,i)];
-                dataTest(i,:) = dataTemp;
-            end
-            
-            test = cell(size(testSamples,4),1);
-            sV = cell(size(testSamples,4),1);
-            j = 1;
-            for i = 1:size(dataTest,1)
-                disp(j)
-                test{j} = shapley(@(x)predictInner(this.net,x),dataTrain(1:end,:),'QueryPoint',dataTest(i,:),'UseParallel',false,'MaxNumSubsets',15000);
-                sV{j} = test{j}.ShapleyValues.ShapleyValue';
-                j = j+1;
-            end
-
-            if isempty(this.shapleyVal)
-                this.shapleyVal = sV;
-            else
-                this.shapleyVal = [this.shapleyVal;sV];
-            end
-
-            function y = predictInner(net,x)
-                dataArray = zeros(4,1440,1,size(x,1));
-                for iInner = 1:size(x,1)
-                    dataArray(1,:,1,iInner) = x(iInner,1:1440);
-                    dataArray(2,:,1,iInner) = x(iInner,1441:2880);
-                    dataArray(3,:,1,iInner) = x(iInner,2881:4320);
-                    dataArray(4,:,1,iInner) = x(iInner,4321:5760);
-                end
-                y = predict(net,dataArray);
-            end
-        end
 
         function test = limeVal(this,trainSamples,testSamples)
-            
+            %Calculation of the Lime Values as XAI
             dataTrain = zeros(size(trainSamples,4),size(trainSamples,2)*size(trainSamples,1));
             for i = 1:size(trainSamples,4)
                 dataTemp=[trainSamples(1,:,1,i),trainSamples(2,:,1,i),trainSamples(3,:,1,i),trainSamples(4,:,1,i)];
@@ -395,18 +360,18 @@ classdef TCOCNN<handle & matlab.mixin.Copyable
 
 
         function test = gradVal(this,testSamples)
-            
-            test =zeros(size(testSamples,4),size(testSamples,1)*size(testSamples,2));
+            %Calculate gradient map for instance
+            test =zeros(size(testSamples,1),size(testSamples,2),1,size(testSamples,4));
             for index = 1:size(testSamples,4)
                 oneOps = gradientAttribution(this.net,testSamples(:,:,:,index),1,'Finalrelu fc',"autodiff");
-                test(index,:) = [oneOps(1,:),oneOps(2,:),oneOps(3,:),oneOps(4,:)];
+                test(:,:,1,index) = oneOps;
             end
             
              
             if isempty(this.gradMaps)
                 this.gradMaps = test;
             else
-                this.gradMaps = [this.gradMaps;test];
+                this.gradMaps = cat(4,this.gradMaps,test);
             end
             
             
